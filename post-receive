@@ -1,0 +1,91 @@
+#!/bin/node
+
+//Post receive hook using node.
+var childp = require('child_process')
+        , fs = require('fs-extra')
+        , redis = require('redis')
+        , async = require('async')
+        , appRepository = require('./lib/appRepository')
+        , docker = require('./lib/docker');
+        
+//application to be deployed
+var appDetails, port;
+
+console.log('Thanks! Let me deploy that for you.');
+
+//set up build context
+var repodir = process.cwd();
+console.log('Working in: ' + process.cwd());
+var workDir = process.cwd() + '/hooks/lib';
+var appname = repodir.split('/').pop();
+console.log('Your repo: ' + appname);
+
+// use a homed directory for testing only. In prod, this would be a shared location.
+var buildsDir = '/home/dpark/builds/';
+var buildDir = buildsDir + appname + '/' + new Date().getTime();
+fs.ensureDirSync(buildDir);
+console.log('Directory created: ' + buildDir);
+
+//execute remaining steps using async
+async.series([
+    newVersion,
+    appInfo,
+    checkout,
+    build,
+    run
+], function(err, results){
+    if (err) {
+        console.log(err);
+        cleanup(true);
+    }
+    else cleanup(false);
+});
+
+
+function checkout(cb) {
+    childp.exec('git checkout -f master', {
+        env: {
+            "GIT_WORK_TREE": buildDir
+        }
+    }, function(err, stdout, stderr) {
+        if (err) {
+            console.log(err);
+            cb(err, null);
+        }
+        cb(null, stdout.toString('utf8'));
+
+    });
+}
+
+function newVersion(cb){
+    appRepository.bumpVersion(appname, function(err, v){
+        cb(err, v);
+    })
+}
+
+function appInfo(cb) {
+    appRepository.appInfo(appname, function(err, app){
+        appDetails = app;
+        cb(err, app);
+    });
+}
+
+function cleanup(forceExit) {
+    fs.removeSync(buildDir);
+    if (forceExit)
+        process.exit(1);
+    else process.exit(0);
+}
+
+function build(cb){
+    docker(appDetails, buildDir, workDir, childp).doBuild(function(err, result){
+        cb(err, result);
+    });
+}
+
+function run(cb){
+    docker(appDetails, buildDir, workDir, childp).runContainer(function(err, results){
+        port = results[2];
+        cb(err, results);
+    });
+}
