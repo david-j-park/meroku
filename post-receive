@@ -40,7 +40,7 @@ async.waterfall([
         cleanup(true);
     }
     else {
-        console.log('App is ready at http://' + results[5]);
+        console.log('App is ready at http://' + results);
         cleanup(false);
     }
 });
