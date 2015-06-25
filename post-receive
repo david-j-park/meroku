@@ -46,7 +46,7 @@ async.waterfall([
 });
 
 
-function checkout(cb) {
+function checkout(app, cb) {
     childp.exec('git checkout -f master', {
         env: {
             "GIT_WORK_TREE": buildDir
@@ -67,7 +67,7 @@ function newVersion(cb) {
     })
 }
 
-function appInfo(cb) {
+function appInfo(version, cb) {
     appRepository.appInfo(appname, function(err, app) {
         appDetails = app;
         cb(err, app);
@@ -82,22 +82,22 @@ function cleanup(forceExit) {
         process.exit(0);
 }
 
-function build(cb) {
+function build(arg1, cb) {
     docker(appDetails, buildDir, workDir, childp).doBuild(function(err, result) {
         cb(err, result);
     });
 }
 
-function run(cb) {
+function run(arg1, cb) {
     docker(appDetails, buildDir, workDir, childp).runContainer(function(err, results) {
         port = results[2];
         cb(err, results);
     });
 }
 
-function register(cb, results) {
+function register(port, cb) {
     hipacheUtils.registerAppListener(appDetails.info.name,
-            (process.env.DOCKER_HOST || 'http://localhost') + ':' + results,
+            (process.env.DOCKER_HOST || 'http://localhost') + ':' + port,
             function(err, result) {
                 if (err) console.log('ERROR: ' + err.toString('utf8'));
                 cb(err, result);
