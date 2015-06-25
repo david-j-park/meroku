@@ -6,8 +6,9 @@ var childp = require('child_process')
         , redis = require('redis')
         , async = require('async')
         , appRepository = require('./lib/appRepository')
+        , hipacheUtils = require('./lib/hipacheUtils')
         , docker = require('./lib/docker');
-        
+
 //application to be deployed
 var appDetails, port;
 
@@ -26,19 +27,22 @@ var buildDir = buildsDir + appname + '/' + new Date().getTime();
 fs.ensureDirSync(buildDir);
 console.log('Directory created: ' + buildDir);
 
-//execute remaining steps using async
-async.series([
+async.waterfall([
     newVersion,
     appInfo,
     checkout,
     build,
-    run
-], function(err, results){
+    run,
+    register
+], function(err, results) {
     if (err) {
-        console.log(err);
+        console.log(err.toString('utf8'));
         cleanup(true);
     }
-    else cleanup(false);
+    else {
+        console.log('App is ready at http://' + results[5]);
+        cleanup(false);
+    }
 });
 
 
@@ -57,14 +61,14 @@ function checkout(cb) {
     });
 }
 
-function newVersion(cb){
-    appRepository.bumpVersion(appname, function(err, v){
+function newVersion(cb) {
+    appRepository.bumpVersion(appname, function(err, v) {
         cb(err, v);
     })
 }
 
 function appInfo(cb) {
-    appRepository.appInfo(appname, function(err, app){
+    appRepository.appInfo(appname, function(err, app) {
         appDetails = app;
         cb(err, app);
     });
@@ -74,18 +78,28 @@ function cleanup(forceExit) {
     fs.removeSync(buildDir);
     if (forceExit)
         process.exit(1);
-    else process.exit(0);
+    else
+        process.exit(0);
 }
 
-function build(cb){
-    docker(appDetails, buildDir, workDir, childp).doBuild(function(err, result){
+function build(cb) {
+    docker(appDetails, buildDir, workDir, childp).doBuild(function(err, result) {
         cb(err, result);
     });
 }
 
-function run(cb){
-    docker(appDetails, buildDir, workDir, childp).runContainer(function(err, results){
+function run(cb) {
+    docker(appDetails, buildDir, workDir, childp).runContainer(function(err, results) {
         port = results[2];
         cb(err, results);
     });
+}
+
+function register(cb, results) {
+    hipacheUtils.registerAppListener(appDetails.info.name,
+            (process.env.DOCKER_HOST || 'http://localhost') + ':' + results,
+            function(err, result) {
+                if (err) console.log('ERROR: ' + err.toString('utf8'));
+                cb(err, result);
+            });
 }

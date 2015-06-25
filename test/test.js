@@ -1,5 +1,6 @@
 var expect = require('chai').expect
-, appRepository = require('../appRepository');
+, appRepository = require('../lib/appRepository')
+, hipacheUtils = require('../lib/hipacheUtils');
 
 //mock childprocess object
 var child = {};
@@ -62,15 +63,26 @@ describe('Unit tests', function(){
             docker.doBuild(function(err, result){
                 expect(err).to.equal(null);
                 done();
-            })
+            });
         });
         
         it('Should run a container', function(done){
             docker.runContainer(function(err, result){
                 expect(err).to.equal(null);
                 done();
-            })
-        })
+            });
+        });
+        
+    });
+    
+    describe('hipache', function(){
+        
+        it('Should update an app registration.', function(done){
+            hipacheUtils.registerAppListener('testapp', 'http://192.168.0.1/', function(err, result){
+                console.log(result);
+                done();
+            });
+        });
         
     });
     
